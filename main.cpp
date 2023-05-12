@@ -32,31 +32,118 @@ typedef unsigned* CAST_LPDWORD;
 // *** Funções ***
 void EsperaTeclado();
 
+// Variáveis Globais
+HANDLE hEventoTeclaEsc, hEventoTeclaD, hEventoTeclaO, hEventoTeclaP, hEventoTeclaQ, hEventoTeclaS, hEventoTeclaX;
+
 int main(){
     
-    HANDLE hEventoTeclaEsc, hEventoTeclaD, hEventoTeclaO, hEventoTeclaP, hEventoTeclaQ, hEventoTeclaS, hEventoTeclaX;
+    // 1. Inicialização
+    SetConsoleTitle("Integrador SCADA e CLP");
+    printf("============ Integrador SCADA e CLP ============\n");
+    
+    // 2. Eventos de Tecla
+        // 2.1. Declaração dos Handles de Eventos
+            // Globais
+        // 2.2. Criação dos Eventos
+    hEventoTeclaEsc = CreateEvent(NULL, TRUE, FALSE, "TeclaESC");
+        if (hEventoTeclaEsc == 0) {printf("Erro na criacao do Evento <Tecla ESC Pressionada>\n"); exit(-1);}
+        CheckForError(hEventoTeclaEsc);
+    hEventoTeclaD = CreateEvent(NULL, FALSE, FALSE, "TeclaD");
+        if (hEventoTeclaD == 0) { printf("Erro na criacao do Evento <Tecla D Pressionada>\n"); exit(-1);}
+    hEventoTeclaO = CreateEvent(NULL, FALSE, FALSE, "TeclaO");
+        if (hEventoTeclaO == 0) { printf("Erro na criacao do Evento <Tecla O Pressionada>\n"); exit(-1);}
+    hEventoTeclaP = CreateEvent(NULL, FALSE, FALSE, "TeclaP");
+        if (hEventoTeclaP == 0) { printf("Erro na criacao do Evento <Tecla P Pressionada>\n"); exit(-1);}
+    hEventoTeclaQ = CreateEvent(NULL, FALSE, FALSE, "TeclaQ");
+        if (hEventoTeclaQ == 0) { printf("Erro na criacao do Evento <Tecla Q Pressionada>\n"); exit(-1);}
+    hEventoTeclaS = CreateEvent(NULL, FALSE, FALSE, "TeclaS");
+        if (hEventoTeclaS == 0) { printf("Erro na criacao do Evento <Tecla S Pressionada>\n"); exit(-1);}
+    hEventoTeclaX = CreateEvent(NULL, FALSE, FALSE, "TeclaX");
+        if (hEventoTeclaX == 0) { printf("Erro na criacao do Evento <Tecla X Pressionada>\n"); exit(-1);}
+
+    // 3. Criação de processos
+        // 3.1 Declaração de Variáveis
+    BOOL status;
+    STARTUPINFO si;						    // StartUpInformation para novo processo
+    PROCESS_INFORMATION ProcessoLeitura;	// Informações sobre novo processo criado
+    PROCESS_INFORMATION ProcessoCaptura;	// Informações sobre novo processo criado
+    PROCESS_INFORMATION ProcessoExibicao;	// Informações sobre novo processo criado
 
 
-    hEventoTeclaEsc = CreateEvent(NULL, TRUE, FALSE, L"TeclaESC");
-    //CheckForError(hEventoTeclaEsc);         
-    hEventoTeclaD = CreateEvent(NULL, FALSE, FALSE, L"TeclaD");
-    hEventoTeclaO = CreateEvent(NULL, FALSE, FALSE, L"TeclaO");
-    hEventoTeclaP = CreateEvent(NULL, FALSE, FALSE, L"TeclaP");
-    hEventoTeclaQ = CreateEvent(NULL, FALSE, FALSE, L"TeclaQ");
-    hEventoTeclaS = CreateEvent(NULL, FALSE, FALSE, L"TeclaS");
-    hEventoTeclaX = CreateEvent(NULL, FALSE, FALSE, L"TeclaX");
+        // 3.2. Cria o Processo de Leitura de Mensagens
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);	// Tamanho da estrutura em bytes
+    status = CreateProcess(
+        "..\\Leitura\\TarefaLeitura\\x64\\Debug\\TarefaLeitura.exe",
+        NULL,											// linha de comando
+        NULL,											// atributos de segurança do processo
+        NULL,											// atributos de segurança da thread
+        FALSE,											// herança de handles
+        NORMAL_PRIORITY_CLASS,							// CreationFlags
+        NULL,											// lpEnvironment
+        "..\\Leitura\\TarefaLeitura\\x64\\Debug\\",		// diretório corrente do filho
+        &si,											// lpStartUpInfo
+        &ProcessoLeitura
+    );
+    if (!status) printf("Erro na criacao do <Processo de Leitura>! Codigo = %d\n", GetLastError());
 
-    // Cria o proceso de leitura do CLP
+        // 3.3. Cria o Processo de Captura de Mensagens
+    status = CreateProcess(
+        "..\\Capturas\\TarefasCaptura\\x64\\Debug\\TarefasCaptura.exe",
+        NULL,											// linha de comando
+        NULL,											// atributos de segurança do processo
+        NULL,											// atributos de segurança da thread
+        FALSE,											// herança de handles
+        NORMAL_PRIORITY_CLASS,							// CreationFlags
+        NULL,											// lpEnvironment
+        "..\\Capturas\\TarefasCaptura\\x64\\Debug\\",   // diretório corrente do filho
+        &si,											// lpStartUpInfo
+        &ProcessoCaptura
+    );
+    if (!status) printf("Erro na criacao do <Processo de Captura>! Codigo = %d\n", GetLastError());
 
-    // Cria o processo de captura de mensagens
+        // 3.4. Cria o processo de Exibição de Mensagens
+    status = CreateProcess(
+        "..\\Exibicao\\TarefasExibicao\\x64\\Debug\\TarefasExibicao.exe",
+        NULL,											// linha de comando
+        NULL,											// atributos de segurança do processo
+        NULL,											// atributos de segurança da thread
+        FALSE,											// herança de handles
+        NORMAL_PRIORITY_CLASS,							// CreationFlags
+        NULL,											// lpEnvironment
+        "..\\Exibicao\\TarefasExibicao\\x64\\Debug\\",  // diretório corrente do filho
+        &si,											// lpStartUpInfo
+        &ProcessoExibicao
+    );
+    if (!status) printf("Erro na criacao do <Processo de Exibicao>! Codigo = %d\n", GetLastError());
 
-    // Cria o processo de exibição de mensagens
 
 
-    EsperaTeclado();
+    // 5. Inicia e Mantém a Rotina
+    printf("Tarefa de Leitura do Teclado corretamente iniciada\n");
+    printf("Esperando uma tecla...\n");
+        // Até a tecla ESC ser digitada, o processo permanecerá em loop dentro desta função:
+    EsperaTeclado();        
 
-    // Destruir handles dos eventos tecla
-    // Destruir handles dos processos
+
+    // 6. Finalização de Handles
+        // 6.1. Handles de Evento
+    CloseHandle(hEventoTeclaEsc);
+    CloseHandle(hEventoTeclaD);
+    CloseHandle(hEventoTeclaO);
+    CloseHandle(hEventoTeclaP);
+    CloseHandle(hEventoTeclaQ);
+    CloseHandle(hEventoTeclaS);
+    CloseHandle(hEventoTeclaX);
+
+        // 6.2. Handles de Processo
+    CloseHandle(ProcessoLeitura.hProcess);
+    CloseHandle(ProcessoLeitura.hThread);
+    CloseHandle(ProcessoCaptura.hProcess);
+    CloseHandle(ProcessoCaptura.hThread);
+    CloseHandle(ProcessoExibicao.hProcess);
+    CloseHandle(ProcessoExibicao.hThread);
+
     // Destruir outros objetos de sincronização
 
     return 0;
@@ -64,37 +151,49 @@ int main(){
 
 void EsperaTeclado() {
 
-    char tecla; // global ou local?
+    char tecla;
 
     do {
         tecla = _getch();
 
         if (tecla == 'D' || tecla == 'd') {
-            printf("tecla D digitada\n");
+            printf("> Tecla D digitada\n");
+            SetEvent(hEventoTeclaD);
+            
         }
         else if (tecla == 'O' || tecla == 'o') {
-            printf("tecla O digitada\n");
+            printf("> Tecla O digitada\n");
+            SetEvent(hEventoTeclaO);
+            
         }
         else if (tecla == 'P' || tecla == 'p') {
-            printf("tecla P digitada\n");
+            printf("> Tecla P digitada\n");
+            SetEvent(hEventoTeclaP);
+            
         }
         else if (tecla == 'Q' || tecla == 'q') {
-            printf("tecla Q digitada\n");
+            printf("> Tecla Q digitada\n");
+            SetEvent(hEventoTeclaQ);
+            
         }
         else if (tecla == 'S' || tecla == 's') {
-            printf("tecla S digitada\n");
+            printf("> Tecla S digitada\n");
+            SetEvent(hEventoTeclaX);
+            
         }
         else if (tecla == 'X' || tecla == 'x') {
-            printf("tecla X digitada\n");
+            printf("> Tecla X digitada\n");
+            SetEvent(hEventoTeclaX);
+            
         }
         else if (tecla == TECLA_ESC) {
-            printf("tecla ESC digitada\n");
+            printf("> Tecla ESC digitada\n");
+            PulseEvent(hEventoTeclaEsc);
+            
         }
         else {
-            printf("a tecla digitada nao esta configurada\n");
+            printf("> A tecla digitada nao esta configurada\n");
         }
 
     } while (tecla != TECLA_ESC);
-
-
 }

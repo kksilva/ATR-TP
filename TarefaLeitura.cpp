@@ -1,5 +1,3 @@
-#include <iostream>
-
 // *** Bibliotecas ***
 // Rever as bibliotecas 
 #include <iostream>
@@ -22,9 +20,9 @@
 // *** Constantes ***
 #define WIN32_LEAN_AND_MEAN 
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
-DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do código exemplo
+DWORD WINAPI WaitEventFunc(LPVOID);	// declaraÃ§Ã£o da funÃ§Ã£o  coisa do cÃ³digo exemplo
 
-// Set de Mínimo e Máximo de Leitura
+// Set de MÃ­nimo e MÃ¡ximo de Leitura
 #define NSEQ_MAX 9999
 #define TEMP_MIN_PRE 700
 #define TEMP_MAX_PRE 900
@@ -36,7 +34,7 @@ DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do código exe
 #define PRESSAO_MAX 10
 #define TAM_MSG 42
 
-// Funções
+// FunÃ§Ãµes
 void GerarMensagem(const char tipoMensagem);
 void gerarMensagemProcesso();
 void gerarMensagemAlarme();
@@ -62,11 +60,11 @@ struct mensagemOtimizacao {
     int hora, minuto, segundo;
 };
 
-// Casting para terceiro e sexto parâmetros da função _beginthreadex
+// Casting para terceiro e sexto parÃ¢metros da funÃ§Ã£o _beginthreadex
 typedef unsigned (WINAPI* CAST_FUNCTION)(LPVOID);
 typedef unsigned* CAST_LPDWORD;
 
-// Variáveis Globais
+// VariÃ¡veis Globais
 HANDLE hEventoTeclaEsc, hEventoTeclaD, hMutexNSeq;
 
 // Contadores NSEQ das mensagens
@@ -78,7 +76,7 @@ int main() { // Receber parametros
     BOOL bStatus;
     char* lpImage;
 
-    // Implementação lista circular:
+    // ImplementaÃ§Ã£o lista circular:
     hListaCircular = CreateFileMapping(
         (HANDLE)0xFFFFFFFF,
         NULL,                       // Estrutura Security_Attributes
@@ -92,8 +90,8 @@ int main() { // Receber parametros
     lpImage = (char *)MapViewOfFile(
         hListaCircular,             //Handle para o arquivo mapeado
         FILE_MAP_WRITE,		        // Direitos de acesso: leitura e escrita
-        0,                          // Bits mais significativos da "visão"
-        0,                          // Bits menos significativos da "visão"
+        0,                          // Bits mais significativos da "visÃ£o"
+        0,                          // Bits menos significativos da "visÃ£o"
         TAM_MSG
     );
     //CheckForError(lpImage);
@@ -129,10 +127,10 @@ int main() { // Receber parametros
     //CheckForError(retornoWait == WAIT_OBJECT_0);
 
     // recebe o evento de bloqueio e o esc
-    // recebe ids de comunicação com as tarefas de captura
-    // criar objetos de sincronização
+    // recebe ids de comunicaÃ§Ã£o com as tarefas de captura
+    // criar objetos de sincronizaÃ§Ã£o
         // mutex de leitura/escrita da lista circular
-        // evento de temporização
+        // evento de temporizaÃ§Ã£o
     // criar a lista circular
     // gerar mensagem
         // armazenar mensagem na lista
@@ -159,7 +157,7 @@ void GerarMensagem(const char tipoMensagem) {
     else if (tipoMensagem == 'O')
         gerarMensagemOtimizacao();
     else {
-        printf("[Erro][Função GerarMensagem]: Tipo de Mensagem Incorreta!");
+        printf("[Erro][FunÃ§Ã£o GerarMensagem]: Tipo de Mensagem Incorreta!");
         exit(-1);
     }
 
@@ -188,7 +186,7 @@ void gerarMensagemProcesso() {
     status = ReleaseMutex(hMutexNSeq);
         //CheckForError(status == WAIT_OBJECT_0);
 
-    // 2. Obter a Temperatura da Zona de Pré-Aquecimento
+    // 2. Obter a Temperatura da Zona de PrÃ©-Aquecimento
     //novaMensagem.tZonaP = randfaixadouble();
 
 

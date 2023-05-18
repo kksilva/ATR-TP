@@ -14,13 +14,34 @@
 #include <locale.h>
 //#include <pthread.h>
 #include <string>
-//#define _CHECKERROR	1
-//#include "CheckForError.h"   
+#define _CHECKERROR	1
+#include "CheckForError.h"
 
 // *** Constantes ***
 #define WIN32_LEAN_AND_MEAN 
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
 DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do código exemplo
+
+// Tamanho dos Campos
+#define TAMANHO_NSEQ 4
+#define TAMANHO_TIPO 2
+#define TAMANHO_T_ZONAS 6
+#define TAMANHO_PRESSAO 4
+#define TAMANHO_PARTE_TEMPO 2
+#define TAMANHO_TEMPO 8
+#define TAMANHO_DECIMAL 1
+#define TAMANHO_CODIGO 2
+
+// Tamanho das Mensagens
+#define TAMANHO_MSG_PROCESSO 42+1
+#define TAMANHO_MSG_ALARME 19+1
+#define TAMANHO_MSG_OTIMIZACAO 37+1
+#define TAMANHO_MSG_MAX 43
+
+// Código Númerico dos Tipos
+#define TIPO_PROCESSO 55
+#define TIPO_ALARME 99
+#define TIPO_OTIMIZACAO 01
 
 // Set de Mínimo e Máximo de Leitura
 #define NSEQ_MAX 9999
@@ -31,33 +52,36 @@ DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do códig
 #define TEMP_MIN_ENCHARQUE 1201
 #define TEMP_MAX_ENCHARQUE 1400
 #define PRESSAO_MAX 12
-#define PRESSAO_MAX 10
-#define TAM_MSG 42
+#define PRESSAO_MIN 10
+#define CODIGO_ALARME_MIN 0
+#define CODIGO_ALARME_MAX 99
 
 // Funções
 void GerarMensagem(const char tipoMensagem);
 void gerarMensagemProcesso();
 void gerarMensagemAlarme();
 void gerarMensagemOtimizacao();
-int randfaixaint(int min, int max);
-double randfaixadouble(double min, double max);
+void traduzirIntParaChar(char* mensagem, int valor, int tamanho, int offset);
+void traduzirDoubleParaChar(char* mensagem, double valor, int tamanho, int offset);
+int randFaixaInt(int min, int max);
+double randFaixaDouble(double min, double max);
 
 // Estruturas de Mensagens
 struct mensagemProcesso {
-    int nSeq, tipo = 55;
-    float tZonaP, tZonaA, tZonaE, pressao;
-    int hora, minuto, segundo;
+    int nSeq{}, tipo = 55;
+    double tZonaP{}, tZonaA{}, tZonaE{}, pressao{};
+    int hora{}, minuto{}, segundo{};
 };
 
 struct mensagemAlarme {
-    int nSeq, tipo = 99, codigo;
-    int hora, minuto, segundo;
+    int nSeq{}, tipo = 99, codigo{};
+    int hora{}, minuto{}, segundo{};
 };
 
 struct mensagemOtimizacao {
-    int nSeq, tipo = 01;
-    float tZonaP, tZonaA, tZonaE;
-    int hora, minuto, segundo;
+    int nSeq{}, tipo = 01;
+    double spZonaP{}, spZonaA{}, spZonaE{};
+    int hora{}, minuto{}, segundo{};
 };
 
 // Casting para terceiro e sexto parâmetros da função _beginthreadex
@@ -74,7 +98,8 @@ int main() { // Receber parametros
     DWORD retornoWait;
     HANDLE hListaCircular, hEvent[2];
     BOOL bStatus;
-    char* lpImage;
+    char* lpImage;;
+    srand((unsigned int)time(NULL));
 
     // Implementação lista circular:
     hListaCircular = CreateFileMapping(
@@ -82,7 +107,7 @@ int main() { // Receber parametros
         NULL,                       // Estrutura Security_Attributes
         PAGE_READWRITE,             // Tipo de acesso
         0,                          // 32 bits mais significativos do tamanho
-        TAM_MSG,                    // 32 bits menos significativos do tamanho
+        TAMANHO_MSG_MAX,                    // 32 bits menos significativos do tamanho
         "LISTA_CIRCULAR"            // Apontador para o nome do objeto
     );
     //CheckForError(hListaCircular);
@@ -92,7 +117,7 @@ int main() { // Receber parametros
         FILE_MAP_WRITE,		        // Direitos de acesso: leitura e escrita
         0,                          // Bits mais significativos da "visão"
         0,                          // Bits menos significativos da "visão"
-        TAM_MSG
+        TAMANHO_MSG_MAX
     );
     //CheckForError(lpImage);
 
@@ -115,12 +140,6 @@ int main() { // Receber parametros
     }
     hMutexNSeq = CreateMutex(NULL, FALSE, "MutexNSeq");
         if (hMutexNSeq == 0) { printf("[LEITURA] Erro na abertura do mutex <Mutex Numero de Sequencia>\n"); exit(-1); }
-
-
-
-
-
-
 
     //retornoWait = WaitForSingleObject(hEventoTeclaD, INFINITE);
     //retornoWait = WaitForMultipleObjects()
@@ -172,42 +191,247 @@ void GerarMensagem(const char tipoMensagem) {
 }
 
 void gerarMensagemProcesso() {
-
     mensagemProcesso novaMensagem;
+    char mensagem[TAMANHO_MSG_PROCESSO];
     DWORD status;
+    SYSTEMTIME relogio;
+    int offset = 0;
 
     // 1. Obter o NSeq
     status = WaitForSingleObject(hMutexNSeq, INFINITE);
-        //CheckForError(status == WAIT_OBJECT_0);
+    CheckForError(status == WAIT_OBJECT_0);
     if (nSeqProcesso == NSEQ_MAX) nSeqProcesso = 0;
     novaMensagem.nSeq = nSeqProcesso;
     nSeqProcesso++;
     nSeqGeral++;
     status = ReleaseMutex(hMutexNSeq);
-        //CheckForError(status == WAIT_OBJECT_0);
+    CheckForError(status == WAIT_OBJECT_0);
 
-    // 2. Obter a Temperatura da Zona de Pré-Aquecimento
-    //novaMensagem.tZonaP = randfaixadouble();
+    traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
+    offset += TAMANHO_NSEQ;
+    mensagem[offset] = '$';
+    offset++;
 
+    // 2. Obter Tipo
+    traduzirIntParaChar(mensagem, TIPO_PROCESSO, TAMANHO_TIPO, offset);
+    offset += TAMANHO_TIPO;
+    mensagem[offset] = '$';
+    offset++;
 
+    // 3. Obter a Temperatura da Zona de Pré-Aquecimento
+    novaMensagem.tZonaP = randFaixaDouble(TEMP_MIN_PRE, TEMP_MAX_PRE);
+    traduzirDoubleParaChar(mensagem, novaMensagem.tZonaP, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
 
+    // 4. Obter a Temperatura da Zona de Aquecimento
+    novaMensagem.tZonaA = randFaixaDouble(TEMP_MIN_AQUECIMENTO, TEMP_MAX_AQUECIMENTO);
+    traduzirDoubleParaChar(mensagem, novaMensagem.tZonaA, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
 
+    // 5. Obter a Temperatura da Zona de Encharque
+    novaMensagem.tZonaE = randFaixaDouble(TEMP_MIN_ENCHARQUE, TEMP_MAX_ENCHARQUE);
+    traduzirDoubleParaChar(mensagem, novaMensagem.tZonaE, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 6. Obter a Pressão
+    novaMensagem.pressao = randFaixaDouble(PRESSAO_MIN, PRESSAO_MAX);
+    traduzirDoubleParaChar(mensagem, novaMensagem.pressao, TAMANHO_PRESSAO, offset);
+    offset += TAMANHO_PRESSAO;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 7. Obter o Horário
+    GetLocalTime(&relogio);
+    novaMensagem.hora = relogio.wHour;
+    novaMensagem.minuto = relogio.wMinute;
+    novaMensagem.segundo = relogio.wSecond;
+
+    traduzirIntParaChar(mensagem, novaMensagem.hora, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.minuto, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.segundo, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = '\0';
 }
+
 void gerarMensagemAlarme() {
+    mensagemAlarme novaMensagem;
+    char mensagem[TAMANHO_MSG_ALARME];
+    DWORD status;
+    SYSTEMTIME relogio;
+    int offset = 0;
 
+    // 1. Obter o NSeq
+    status = WaitForSingleObject(hMutexNSeq, INFINITE);
+    CheckForError(status);
+    if (nSeqAlarme == NSEQ_MAX) nSeqAlarme = 0;
+    novaMensagem.nSeq = nSeqAlarme;
+    nSeqAlarme++;
+    nSeqGeral++;
+    status = ReleaseMutex(hMutexNSeq);
+    CheckForError(status);
+
+    traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
+    offset += TAMANHO_NSEQ;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 2. Obter Tipo
+    traduzirIntParaChar(mensagem, TIPO_ALARME, TAMANHO_TIPO, offset);
+    offset += TAMANHO_TIPO;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 3. Obter o Código do Alarme
+    novaMensagem.codigo = randFaixaInt(CODIGO_ALARME_MIN, CODIGO_ALARME_MAX);
+    traduzirIntParaChar(mensagem, novaMensagem.codigo, TAMANHO_CODIGO, offset);
+    offset += TAMANHO_CODIGO;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 4. Obter o Horário
+    GetLocalTime(&relogio);
+    novaMensagem.hora = relogio.wHour;
+    novaMensagem.minuto = relogio.wMinute;
+    novaMensagem.segundo = relogio.wSecond;
+
+    traduzirIntParaChar(mensagem, novaMensagem.hora, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.minuto, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.segundo, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = '\0';
 }
+
 void gerarMensagemOtimizacao() {
+    mensagemOtimizacao novaMensagem;
+    char mensagem[TAMANHO_MSG_OTIMIZACAO];
+    DWORD status;
+    SYSTEMTIME relogio;
+    int offset = 0;
 
+    // 1. Obter o NSeq
+    status = WaitForSingleObject(hMutexNSeq, INFINITE);
+    CheckForError(status);
+    if (nSeqOtimizacao == NSEQ_MAX) nSeqOtimizacao = 0;
+    novaMensagem.nSeq = nSeqOtimizacao;
+    nSeqOtimizacao++;
+    nSeqGeral++;
+    status = ReleaseMutex(hMutexNSeq);
+    CheckForError(status);
+
+    traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
+    offset += TAMANHO_NSEQ;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 2. Obter Tipo
+    traduzirIntParaChar(mensagem, TIPO_OTIMIZACAO, TAMANHO_TIPO, offset);
+    offset += TAMANHO_TIPO;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 3. Obter o Set-Point de Temperatura da Zona de Pré-Aquecimento
+    novaMensagem.spZonaP = randFaixaDouble(TEMP_MIN_PRE, TEMP_MAX_PRE);
+    traduzirDoubleParaChar(mensagem, novaMensagem.spZonaP, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 4. Obter o Set-Point de Temperatura da Zona de Aquecimento
+    novaMensagem.spZonaA = randFaixaDouble(TEMP_MIN_AQUECIMENTO, TEMP_MAX_AQUECIMENTO);
+    traduzirDoubleParaChar(mensagem, novaMensagem.spZonaA, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 5. Obter o Set-Point de Temperatura da Zona de Encharque
+    novaMensagem.spZonaE = randFaixaDouble(TEMP_MIN_ENCHARQUE, TEMP_MAX_ENCHARQUE);
+    traduzirDoubleParaChar(mensagem, novaMensagem.spZonaE, TAMANHO_T_ZONAS, offset);
+    offset += TAMANHO_T_ZONAS;
+    mensagem[offset] = '$';
+    offset++;
+
+    // 6. Obter o Horário
+    GetLocalTime(&relogio);
+    novaMensagem.hora = relogio.wHour;
+    novaMensagem.minuto = relogio.wMinute;
+    novaMensagem.segundo = relogio.wSecond;
+
+    traduzirIntParaChar(mensagem, novaMensagem.hora, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.minuto, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = ':';
+    offset++;
+    traduzirIntParaChar(mensagem, novaMensagem.segundo, TAMANHO_PARTE_TEMPO, offset);
+    offset += TAMANHO_PARTE_TEMPO;
+    mensagem[offset] = '\0';
 }
 
-int randfaixaint(int min, int max) {
+void traduzirIntParaChar(char* mensagem, int valor, int tamanho, int offset) {
+
+
+    for (int i = offset; i < (tamanho+offset); i++) {
+        mensagem[i] = '0';
+    }
+
+    if(valor == 0){
+        return;
+    }
+
+    for (int i = 1; valor > 0; i++) {
+        mensagem[tamanho + offset - i] = (valor % 10) + '0';
+        valor /= 10;
+    }
+    return;
+}
+
+void traduzirDoubleParaChar(char* mensagem, double valor, int tamanho, int offset) {
+
+    int parteInteira = (int)valor;
+    int parteDecimal;
+    int tamanhoParteInteira = tamanho - TAMANHO_DECIMAL - 1;
+
+
+    traduzirIntParaChar(mensagem, parteInteira, tamanhoParteInteira, offset);
+    offset += tamanhoParteInteira;
+    mensagem[offset] = '.';
+    offset++;
+
+    valor -= parteInteira;
+    parteDecimal = valor * pow(10, TAMANHO_DECIMAL);
+    traduzirIntParaChar(mensagem, parteDecimal, TAMANHO_DECIMAL, offset);
+
+    return;
+}
+
+int randFaixaInt(int min, int max) {
 
     int range = (max - min);
     int div = RAND_MAX / range;
     return min + (rand() / div);
 }
 
-double randfaixadouble(double min, double max) {
+double randFaixaDouble(double min, double max) {
 
     double range = (max - min);
     double div = RAND_MAX / range;

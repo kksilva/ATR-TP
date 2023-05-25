@@ -12,10 +12,14 @@
 #include <time.h>
 #include <string.h>
 #include <locale.h>
+#include "bGetString.h"
 //#include <pthread.h>
 #include <string>
-#define _CHECKERROR	1
-#include "CheckForError.h"
+//#define _CHECKERROR	1
+//#include "CheckForError.h"
+
+#define WNT_LEAN_AND_MEAN
+
 
 // *** Constantes ***
 #define WIN32_LEAN_AND_MEAN 
@@ -56,6 +60,8 @@ DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do códig
 #define CODIGO_ALARME_MIN 0
 #define CODIGO_ALARME_MAX 99
 
+char Mensagem[TAMANHO_MSG_MAX];
+
 // Funções
 void GerarMensagem(const char tipoMensagem);
 void gerarMensagemProcesso();
@@ -90,6 +96,7 @@ typedef unsigned* CAST_LPDWORD;
 
 // Variáveis Globais
 HANDLE hEventoTeclaEsc, hEventoTeclaD, hMutexNSeq;
+HANDLE hMensagemDisponivel, hLerMensagem;
 
 // Contadores NSEQ das mensagens
 int nSeqProcesso = 0, nSeqAlarme = 0, nSeqOtimizacao = 0, nSeqGeral = 0;
@@ -121,26 +128,41 @@ int main() { // Receber parametros
     );
     //CheckForError(lpImage);
 
-    printf("*** tarefa leitura iniciada ***\n");
-
+    //Abrir Eventos vindos de outros processos:
     hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
-        if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
+    if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
     hEventoTeclaD = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaD");
-        if (hEventoTeclaD == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla D Pressionada>\n"); exit(-1); }
-    
-    HANDLE Eventos[2] = { hEventoTeclaD, hEventoTeclaEsc };
-    retornoWait = WaitForMultipleObjects(2, Eventos, FALSE, INFINITE);      // Espera por um dos dois eventos do vetor Eventos
-    //CheckForError(retornoWait == WAIT_OBJECT_0);
-   
-    int nTipoEvento = retornoWait - WAIT_OBJECT_0;
-    if (nTipoEvento == 0) {
-    
-    //tecla D
-    
-    }
-    hMutexNSeq = CreateMutex(NULL, FALSE, "MutexNSeq");
-        if (hMutexNSeq == 0) { printf("[LEITURA] Erro na abertura do mutex <Mutex Numero de Sequencia>\n"); exit(-1); }
+    if (hEventoTeclaD == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla D Pressionada>\n"); exit(-1); }
 
+    //Cria Eventos para sinalizacao dos outros processos
+    hMensagemDisponivel = CreateEvent(NULL, FALSE, FALSE, "hMensagemDisponivel");
+    if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na criacao do evento <Mensagem Disponivel>\n"); exit(-1); }
+    hLerMensagem = CreateEvent(NULL, FALSE, FALSE, "hLerMensagem");
+    if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na criacao do evento <Ler Mensagem>\n"); exit(-1); }
+
+
+
+    do {
+        printf("Entre com nova Mensagem a ser enviada:\n");
+        bStatus = bGetString(Mensagem, TAMANHO_MSG_MAX);
+        printf("\n");
+
+        // Escreve na memória compartilhada
+        if (bStatus) strcpy(lpImage, Mensagem);
+        else strcpy(lpImage, ""); // Aborta Processo Servidor
+        SetEvent(hMensagemDisponivel);	// Avisa ao outro Processo que foi escrito
+
+        if (!bStatus) break;
+
+        // Espera que o outro processo leia a mensagem 
+        WaitForSingleObject(hLerMensagem, INFINITE);
+        ResetEvent(hLerMensagem);
+        printf("Buffer apos leitura/limpeza [deve ser NULL]= %s\n\n", lpImage);
+    } while (TRUE);
+
+
+    hMutexNSeq = CreateMutex(NULL, FALSE, "MutexNSeq");
+      
     //retornoWait = WaitForSingleObject(hEventoTeclaD, INFINITE);
     //retornoWait = WaitForMultipleObjects()
     //CheckForError(retornoWait == WAIT_OBJECT_0);
@@ -157,9 +179,12 @@ int main() { // Receber parametros
 
     bStatus = UnmapViewOfFile(lpImage);
     //CheckForError(bStatus);
+
     CloseHandle(hListaCircular);
     CloseHandle(hEventoTeclaEsc);
     CloseHandle(hEventoTeclaD);
+    CloseHandle(hMensagemDisponivel);
+    CloseHandle(hLerMensagem);
 
     CloseHandle(hMutexNSeq);
 
@@ -199,13 +224,13 @@ void gerarMensagemProcesso() {
 
     // 1. Obter o NSeq
     status = WaitForSingleObject(hMutexNSeq, INFINITE);
-    CheckForError(status == WAIT_OBJECT_0);
+    //CheckForError(status == WAIT_OBJECT_0);
     if (nSeqProcesso == NSEQ_MAX) nSeqProcesso = 0;
     novaMensagem.nSeq = nSeqProcesso;
     nSeqProcesso++;
     nSeqGeral++;
     status = ReleaseMutex(hMutexNSeq);
-    CheckForError(status == WAIT_OBJECT_0);
+    //CheckForError(status == WAIT_OBJECT_0);
 
     traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
     offset += TAMANHO_NSEQ;
@@ -274,13 +299,13 @@ void gerarMensagemAlarme() {
 
     // 1. Obter o NSeq
     status = WaitForSingleObject(hMutexNSeq, INFINITE);
-    CheckForError(status);
+    //CheckForError(status);
     if (nSeqAlarme == NSEQ_MAX) nSeqAlarme = 0;
     novaMensagem.nSeq = nSeqAlarme;
     nSeqAlarme++;
     nSeqGeral++;
     status = ReleaseMutex(hMutexNSeq);
-    CheckForError(status);
+    //CheckForError(status);
 
     traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
     offset += TAMANHO_NSEQ;
@@ -328,13 +353,13 @@ void gerarMensagemOtimizacao() {
 
     // 1. Obter o NSeq
     status = WaitForSingleObject(hMutexNSeq, INFINITE);
-    CheckForError(status);
+    //CheckForError(status);
     if (nSeqOtimizacao == NSEQ_MAX) nSeqOtimizacao = 0;
     novaMensagem.nSeq = nSeqOtimizacao;
     nSeqOtimizacao++;
     nSeqGeral++;
     status = ReleaseMutex(hMutexNSeq);
-    CheckForError(status);
+    //CheckForError(status);
 
     traduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
     offset += TAMANHO_NSEQ;
@@ -418,7 +443,7 @@ void traduzirDoubleParaChar(char* mensagem, double valor, int tamanho, int offse
     offset++;
 
     valor -= parteInteira;
-    parteDecimal = valor * pow(10, TAMANHO_DECIMAL);
+    parteDecimal = (int)valor * pow(10, TAMANHO_DECIMAL);
     traduzirIntParaChar(mensagem, parteDecimal, TAMANHO_DECIMAL, offset);
 
     return;

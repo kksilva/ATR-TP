@@ -22,15 +22,17 @@
 // *** Constantes ***
 #define TECLA_ESC 0x1B
 #define WIN32_LEAN_AND_MEAN 
+#define WNT_LEAN_AND_MEAN
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
 #define TAM_MSG 42
 
+HANDLE hEventoTeclaEsc, hEventoTecla;
+HANDLE hMensagemDisponivel, hLerMensagem;
 DWORD WINAPI WaitEventFunc(LPVOID);	// declaração da função  coisa do código exemplo
 
 // Casting para terceiro e sexto parâmetros da função _beginthreadex
 typedef unsigned (WINAPI* CAST_FUNCTION)(LPVOID);
 typedef unsigned* CAST_LPDWORD;
-
 
 int main() { // Receber parametros
     HANDLE hListaCircular;
@@ -38,7 +40,7 @@ int main() { // Receber parametros
     char* lpImage;
 
     hListaCircular = OpenFileMapping(
-        FALSE_MAP_ALL_ACCESS,               // Direitos de acesso
+        FILE_MAP_ALL_ACCESS,               // Direitos de acesso
         FALSE,                              // O handle não será herdado
         "LISTA_CIRCULAR"                    // Apontador para o nome do objeto
     );
@@ -53,6 +55,33 @@ int main() { // Receber parametros
     );
     //CheckForError(lpImage);
 
+    hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
+    if (hEventoTeclaEsc == 0) { printf("[CAPTURA] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
+    
+    //abrir outro evento do teclado
+    hEventoTecla = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaD");
+
+    hMensagemDisponivel = OpenEvent(EVENT_ALL_ACCESS, FALSE, "hMensagemDisponivel");
+    if (hMensagemDisponivel == 0) { printf("[CAPTURA] Erro na abertura do evento <Mensagem Disponivel>\n"); exit(-1); }
+    hLerMensagem = OpenEvent(EVENT_ALL_ACCESS, FALSE, "MsgRead");
+    if (hMensagemDisponivel == 0) { printf("[CAPTURA] Erro na abertura do evento <Ler Mensagem>\n"); exit(-1); }
+
+    do {
+        // Espera que outro processo escreva mensagem 
+        WaitForSingleObject(hMensagemDisponivel, INFINITE);
+        ResetEvent(hMensagemDisponivel);
+        printf("Mensagem Recebida= %s\n", lpImage);
+        if (strcmp(lpImage, "") == 0) break;
+
+        // Limpa memória compartilhada
+        strcpy(lpImage, "");
+        SetEvent(hLerMensagem);	// Avisa ao outro processo para ler mensagem	
+
+    } while (TRUE);
+
+    // Elimina mapeamento
+    bStatus = UnmapViewOfFile(lpImage);
+    //CheckForError(bStatus);
 
     printf("*** tarefas de captura iniciadas ***\n");
 

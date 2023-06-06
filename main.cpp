@@ -47,7 +47,6 @@ int main(){
         // 2.2. Criação dos Eventos
     hEventoTeclaEsc = CreateEvent(NULL, TRUE, FALSE, "TeclaESC");
         if (hEventoTeclaEsc == 0) {printf("Erro na criacao do Evento <Tecla ESC Pressionada>\n"); exit(-1);}
-        CheckForError(hEventoTeclaEsc);
     hEventoTeclaD = CreateEvent(NULL, FALSE, FALSE, "TeclaD");
         if (hEventoTeclaD == 0) { printf("Erro na criacao do Evento <Tecla D Pressionada>\n"); exit(-1);}
     hEventoTeclaO = CreateEvent(NULL, FALSE, FALSE, "TeclaO");
@@ -69,6 +68,7 @@ int main(){
     PROCESS_INFORMATION ProcessoCaptura;	// Informações sobre novo processo criado
     PROCESS_INFORMATION ProcessoExibicao;	// Informações sobre novo processo criado
 
+    
 
         // 3.2. Cria o Processo de Leitura de Mensagens
     ZeroMemory(&si, sizeof(si));
@@ -86,6 +86,10 @@ int main(){
         &ProcessoLeitura
     );
     if (!status) printf("Erro na criacao do <Processo de Leitura>! Codigo = %d\n", GetLastError());
+
+    
+
+    Sleep(5000);
 
         // 3.3. Cria o Processo de Captura de Mensagens
     status = CreateProcess(
@@ -120,12 +124,12 @@ int main(){
 
 
     // 5. Inicia e Mantém a Rotina
-    printf("Tarefa de Leitura do Teclado corretamente iniciada\n");
+    printf("Tarefa de Leitura do Teclado Executando Rotina\n");
     printf("Esperando uma tecla...\n");
         // Até a tecla ESC ser digitada, o processo permanecerá em loop dentro desta função:
     EsperaTeclado();        
 
-
+    Sleep(5000);
     // 6. Finalização de Handles
         // 6.1. Handles de Evento
     CloseHandle(hEventoTeclaEsc);

@@ -14,8 +14,8 @@
 //#include "bGetString.h"
 //#include <pthread.h>
 #include <string>
-#define _CHECKERROR	1
-#include "CheckForError.h"
+//#define _CHECKERROR	1
+//#include "CheckForError.h"
 
 #define WNT_LEAN_AND_MEAN
 
@@ -60,7 +60,6 @@ DWORD WINAPI WaitEventFunc(LPVOID);
 #define PRESSAO_MIN 10
 #define CODIGO_ALARME_MIN 0
 #define CODIGO_ALARME_MAX 99
-
 
 // Funções
 void GerarMensagem(const char tipoMensagem);
@@ -110,15 +109,20 @@ HANDLE hMutexNSeq;
 
 
 int main() {
-
     printf("*** Tarefa de Leitura Iniciada ***\n");
+
     DWORD retornoWait;
     HANDLE hListaCircular, hEspera[2], hEsperaTeclas[2];
     BOOL bStatus;
-    
     srand((unsigned int)time(NULL));
+
+    // 1. Abre os eventos vindos de outros processos
+    hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
+    if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla ESC Pressionada> Codigo = %d\n", GetLastError()); exit(-1); }
+    hEventoTeclaD = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaD");
+    if (hEventoTeclaD == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla D Pressionada> Codigo = %d\n", GetLastError()); exit(-1); }
     
-    // Implementação lista circular:
+    // 2. Cria o mapeamento em memória
     hListaCircular = CreateFileMapping(
         NULL,
         NULL,                       // Estrutura Security_Attributes
@@ -127,31 +131,23 @@ int main() {
         TAMANHO_BYTES_LISTA,        // 32 bits menos significativos do tamanho
         "LISTA_CIRCULAR"            // Apontador para o nome do objeto
     );
-    
-   //CheckForError(hListaCircular == 0);
-    
+    if (hListaCircular == NULL) { printf("[LEITURA] Erro na criacao do mapeamento em memoria <hListaCircular> Codigo = %d\n", GetLastError()); exit(-1); }
 
+    // 3. Lista Circular
     DWORD offsetListaCircular = 0;
     for (int i = 0; i < TAMANHO_LISTA_CIRCULAR; i++) {
-        
         listaCircular[i] = (char*)MapViewOfFile(
             hListaCircular,             // Handle para o arquivo mapeado
-            FILE_MAP_ALL_ACCESS,		// Direitos de acesso: leitura e escrita
+            FILE_MAP_WRITE,		        // Direitos de acesso: leitura e escrita
             0,                          // Bits mais significativos da "visão"
-            offsetListaCircular,        // Bits menos significativos da "visão"
-            TAMANHO_MSG_MAX
+            (DWORD) 0,                  // Bits menos significativos da "visão"
+            TAMANHO_BYTES_LISTA                          // Tamanho da visao, em bytes
         );
+        if (listaCircular[i] == NULL) { printf("[LEITURA] Erro na criacao da visao do mapeamento em memoria <listaCircular> Codigo = %d\n", GetLastError()); exit(-1); }
         offsetListaCircular += TAMANHO_MSG_MAX;
-    }
-    
-    
-    //Abrir Eventos vindos de outros processos:
-    hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
-    if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
-    hEventoTeclaD = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaD");
-    if (hEventoTeclaD == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla D Pressionada>\n"); exit(-1); }
+    }   
 
-    //Cria Eventos para sinalizacao dos outros processos
+    // 4. Cria Eventos para sinalizacao dos outros processos
     hMensagemDisponivel = CreateEvent(NULL, FALSE, FALSE, "hMensagemDisponivel");
     if (hMensagemDisponivel == 0) { printf("[LEITURA] Erro na criacao do evento <Mensagem Disponivel>\n"); exit(-1); }
     hLerMensagem = CreateEvent(NULL, FALSE, FALSE, "hLerMensagem");
@@ -215,8 +211,12 @@ int main() {
     CloseHandle(hEventoTeclaEsc);
     CloseHandle(hEventoTeclaD);
     CloseHandle(hMensagemDisponivel);
+
     CloseHandle(hLerMensagem);
-    CloseHandle(hMutexNSeq);
+    CloseHandle(hMensagemDisponivel);
+    CloseHandle(hEspera);
+    CloseHandle(hEsperaTeclas);
+
     CloseHandle(hMutexListaCircular);
     CloseHandle(hSemaforoLivres);
     CloseHandle(hSemaforoOcupadas);

@@ -1,0 +1,135 @@
+// *** Bibliotecas ***
+#include <iostream>
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <tchar.h>
+#include <errno.h>
+#include <signal.h>
+#include <conio.h>		                                                        
+#include <math.h>                                                               
+#include <time.h>
+#include <string.h>
+#include <locale.h>
+#include <process.h>
+#include <string>
+//#define _CHECKERROR	1
+//#include "CheckForError.h"   
+
+// *** Constantes ***
+#define TAMANHO_MSG_OTIMIZACAO 37+1
+#define WIN32_LEAN_AND_MEAN 
+#define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
+DWORD WINAPI WaitEventFunc(LPVOID);
+
+// ** Handles **
+HANDLE hEventoTeclaEsc, hEventoTeclaS, hEventoTeclaX;
+HANDLE  hEventoTudoPronto, hEventoExibicaoOtimizacaoPronta;
+HANDLE hMsgOtimizacaoDisponivel;
+
+// ** Funções **
+void LerMensagemOtimizacao();
+
+int main() { // Receber parametros
+
+    SetConsoleTitle("Dados de Otimizacao");
+    printf("============ Exibicao Mensagens Dados de Otimizacao ============\n");
+
+
+    printf("*** Tarefa de Exibicao de Dados de Otimizacao Iniciada ***\n");
+
+    // 1. Abre os eventos vindos de outros processos
+    hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
+    if (hEventoTeclaEsc == 0) { printf("[EXIBICAO] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
+    hEventoTeclaS = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaS");
+    if (hEventoTeclaS == 0) { printf("[EXIBICAO] Erro na abertura do evento <Tecla S Pressionada>\n"); exit(-1); }
+    hEventoTeclaX = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaX");
+    if (hEventoTeclaX == 0) { printf("[EXIBICAO] Erro na abertura do evento <Tecla X Pressionada>\n"); exit(-1); }
+
+    hEventoTudoPronto = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TudoPronto");
+    if (hEventoTudoPronto == 0) { printf("[EXIBICAO] Erro na abertura do evento <Tudo Pronto>\n"); exit(-1); }
+    hEventoExibicaoOtimizacaoPronta = OpenEvent(EVENT_ALL_ACCESS, FALSE, "ExibicaoOtimizacaoPronta");
+    if (hEventoExibicaoOtimizacaoPronta == 0) { printf("[EXIBICAO] Erro na abertura do evento <Exibicao Otimizacao Pronta>\n"); exit(-1); }
+
+    Sleep(1000);
+    hMsgOtimizacaoDisponivel = OpenEvent(EVENT_ALL_ACCESS, FALSE, "MsgOtimizacaoDisponivel");
+    if (hMsgOtimizacaoDisponivel == 0) { printf("[EXIBICAO] Erro na abertura do evento <MsgOtimizacaoDisponivel>\n"); exit(-1); }
+    
+
+    // Avisa que está pronta e espera as outras
+    printf("*** Tarefa de Exibicao de Dados de Otimizacao Pronta para Executar! ***\n");
+    SetEvent(hEventoExibicaoOtimizacaoPronta);
+    WaitForSingleObject(hEventoTudoPronto, INFINITE);
+
+
+    // Começa a Rotina
+    HANDLE hEventos[4] = { hEventoTeclaS, hEventoTeclaX, hEventoTeclaEsc, hMsgOtimizacaoDisponivel};
+    DWORD retornoSincronizacao;
+
+    // 2. Aguarda a sinalizacao de um evento
+    do {
+        int countPerdasOtimizacao = 0;     
+        retornoSincronizacao = WaitForMultipleObjects(4, hEventos, FALSE, INFINITE);
+
+        if (retornoSincronizacao == (WAIT_OBJECT_0 + 0)) {             // hEventoTeclaQ: exibição de dados de processo
+            // Bloqueia-se esperando a tecla Q novamente ou a tecla ESC
+            printf("*** Tarefa de Exibicao de Dados de Otimizacao Bloqueada! ***\n");
+            do {
+                retornoSincronizacao = WaitForMultipleObjects(4, hEventos, FALSE, INFINITE);
+                if (retornoSincronizacao == (WAIT_OBJECT_0 + 1)) {
+                    system("CLS");
+                }
+                else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3)) {
+                    countPerdasOtimizacao++;
+                }
+                else {
+                    printf("*** Tarefa de Exibicao de Dados de Otimizacao Desbloqueada! ***\n");
+                    
+                }
+            } while ((retornoSincronizacao != (WAIT_OBJECT_0 + 0)) && (retornoSincronizacao != (WAIT_OBJECT_0 + 2)));
+
+        }
+
+        else if (retornoSincronizacao == (WAIT_OBJECT_0 + 1)) {       //hEventoTeclaX: limpar janela de console de dados de otimização
+            system("CLS");
+        }
+
+        else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3)) {
+            LerMensagemOtimizacao();
+        }
+        else if (retornoSincronizacao == (WAIT_OBJECT_0 + 4)) {
+            LerMensagemOtimizacao();
+        }
+
+    } while (retornoSincronizacao != (WAIT_OBJECT_0 + 2));
+
+    printf("*** Finalizando Tarefa de Exibicao de Dados de Processo! ***\n");
+
+    // 3. Lista Circular
+
+
+
+    // recebe o evento de bloqueio e o esc
+    // recebe ids de comunicação com as tarefas de captura
+    // criar objetos de sincronização
+        // mutex de leitura/escrita da lista circular
+        // evento de temporização
+    // criar a lista circular
+    // gerar mensagem
+        // armazenar mensagem na lista
+    // wait for multiple, bloqueio ou ESC
+
+
+    CloseHandle(hEventoTeclaEsc);
+    CloseHandle(hEventoTeclaS);
+    CloseHandle(hEventoTeclaX);
+    CloseHandle(hEventoTudoPronto);
+    CloseHandle(hEventoExibicaoOtimizacaoPronta);
+
+    return 0;
+}
+
+void LerMensagemOtimizacao() {
+
+
+}

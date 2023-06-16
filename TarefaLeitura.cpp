@@ -65,11 +65,12 @@ DWORD WINAPI WaitEventFunc(LPVOID);
 // *** Threads Secundárias ***
 DWORD WINAPI TarefaCapturaDadosProcesso();
 DWORD WINAPI TarefaCapturaDadosOtimizacao();
+DWORD WINAPI TemporizacaoTarefas();
 
 // Funções
 void GerarMensagem(const char tipoMensagem);
-void GerarMensagemProcesso(char *mensagem);
-void GerarMensagemAlarme(char *mensagem);
+void GerarMensagemProcesso(char* mensagem);
+void GerarMensagemAlarme(char* mensagem);
 void GerarMensagemOtimizacao(char* mensagem);
 void DepositarMensagem(char* mensagem);
 void TraduzirIntParaChar(char* mensagem, int valor, int tamanho, int offset);
@@ -99,6 +100,10 @@ struct mensagemOtimizacao {
     int hora{}, minuto{}, segundo{};
 };
 
+// Funcoes de CALLBACK de Temporizacao
+void CALLBACK MensagensProcessos(PVOID, BOOLEAN);
+void CALLBACK MensagensAlarme(PVOID, BOOLEAN);
+
 // Casting para terceiro e sexto parâmetros da função _beginthreadex
 typedef unsigned (WINAPI* CAST_FUNCTION)(LPVOID);
 typedef unsigned* CAST_LPDWORD;
@@ -108,6 +113,7 @@ HANDLE hEventoTeclaEsc, hEventoTeclaD, hEventoTeclaO, hEventoTeclaP;
 HANDLE hEventoTudoPronto, hEventoLeituraPronta, hEventoCapturaProcessoPronta, hEventoCapturaOtimizacaoPronta;
 HANDLE hMsgAlarmeDisponivel, hMsgOtimizacaoDisponivel, hMsgProcessoDisponivel;
 HANDLE hMailslot;
+HANDLE hFilaTemporizadores, hTemporizadorAlarme, hTemporizadorProcesso;
 
 // Variáveis Globais da Lista Circular
 int posicaoLivre = 0, posicaoOcupada = 0;
@@ -120,7 +126,7 @@ int nSeqProcesso = 0, nSeqAlarme = 0, nSeqOtimizacao = 0, nSeqGeral = 0;
 HANDLE hMutexNSeq;
 
 // Tarefas de Captura
-HANDLE hThreadDadosProcesso, hThreadDadosOtimizacao;
+HANDLE hThreadDadosProcesso, hThreadDadosOtimizacao, hThreadTemporizacao;
 
 
 int main() {
@@ -129,10 +135,9 @@ int main() {
     DWORD retornoWait;
     HANDLE hEspera[2], hEsperaTeclas[2];
     BOOL bStatus;
-    
+
     srand((unsigned int)time(NULL));
-    
-    
+
     //Abrir Eventos vindos de outros processos:
     hEventoTeclaEsc = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TeclaESC");
     if (hEventoTeclaEsc == 0) { printf("[LEITURA] Erro na abertura do evento <Tecla ESC Pressionada>\n"); exit(-1); }
@@ -144,17 +149,17 @@ int main() {
     if (hEventoTeclaP == 0) { printf("[CAPTURA] Erro na abertura do evento <Tecla P Pressionada>\n"); exit(-1); }
 
     hEventoTudoPronto = OpenEvent(EVENT_ALL_ACCESS, FALSE, "TudoPronto");
-        if (hEventoTudoPronto == 0) { printf("[LEITURA] Erro na abertura do evento <Tudo Pronto>\n"); exit(-1); }
+    if (hEventoTudoPronto == 0) { printf("[LEITURA] Erro na abertura do evento <Tudo Pronto>\n"); exit(-1); }
     hEventoLeituraPronta = OpenEvent(EVENT_ALL_ACCESS, FALSE, "LeituraPronta");
-        if (hEventoLeituraPronta == 0) { printf("[LEITURA] Erro na abertura do evento <Leitura Pronta>\n"); exit(-1); }
+    if (hEventoLeituraPronta == 0) { printf("[LEITURA] Erro na abertura do evento <Leitura Pronta>\n"); exit(-1); }
     hEventoCapturaProcessoPronta = OpenEvent(EVENT_ALL_ACCESS, FALSE, "CapturaProcessoPronta");
-        if (hEventoCapturaProcessoPronta == 0) { printf("[CAPTURA] Erro na abertura do evento <Captura Processo Pronta>\n"); exit(-1); }
+    if (hEventoCapturaProcessoPronta == 0) { printf("[CAPTURA] Erro na abertura do evento <Captura Processo Pronta>\n"); exit(-1); }
     hEventoCapturaOtimizacaoPronta = OpenEvent(EVENT_ALL_ACCESS, FALSE, "CapturaOtimizacaoPronta");
-        if (hEventoCapturaOtimizacaoPronta == 0) { printf("[CAPTURA] Erro na abertura do evento <Captura Otimizacao Pronta>\n"); exit(-1); }
+    if (hEventoCapturaOtimizacaoPronta == 0) { printf("[CAPTURA] Erro na abertura do evento <Captura Otimizacao Pronta>\n"); exit(-1); }
 
     // Criação de Evento Msg Disponível
     hMsgAlarmeDisponivel = CreateEvent(NULL, FALSE, FALSE, "MsgAlarmeDisponivel");
-        if (hMsgAlarmeDisponivel == 0) { printf("[CAPTURA] Erro na criacao do evento <MsgAlarmeDisponivel>\n"); exit(-1); }
+    if (hMsgAlarmeDisponivel == 0) { printf("[CAPTURA] Erro na criacao do evento <MsgAlarmeDisponivel>\n"); exit(-1); }
 
 
     // Mutex para alterar o NSeq das mensagens
@@ -171,7 +176,7 @@ int main() {
     hSemaforoOcupadas = CreateSemaphore(NULL, 0, TAMANHO_LISTA_CIRCULAR, "SemaforoOcupadas");
     if (hSemaforoOcupadas == 0) { printf("[LEITURA] Erro na Criacao do Semaforo de Posicoes Ocupadas\n"); exit(-1); }
 
-    DWORD idProcesso, idOtimizacao;
+    DWORD idProcesso, idOtimizacao, idTemporizacao;
 
     hThreadDadosProcesso = (HANDLE)_beginthreadex(
         NULL,
@@ -191,11 +196,19 @@ int main() {
         (CAST_LPDWORD)&idOtimizacao
     );
 
+    hThreadTemporizacao = (HANDLE)_beginthreadex(
+        NULL,
+        0,
+        (CAST_FUNCTION)TemporizacaoTarefas,
+        NULL,
+        0,
+        (CAST_LPDWORD)&idTemporizacao
+    );
 
     // Vetor de Eventos a serem utilizados no WaitForMultipleObjects
     hEspera[0] = hEventoTeclaD;
     hEspera[1] = hEventoTeclaEsc;
-            // Será maior na parte 2 do trabalho
+    // Será maior na parte 2 do trabalho
 
     hEsperaTeclas[0] = hEventoTeclaD;
     hEsperaTeclas[1] = hEventoTeclaEsc;
@@ -208,21 +221,24 @@ int main() {
     // Início da Rotina
     printf("*** Tarefa de Leitura Executando Rotina ***\n");
 
-
     do {
         retornoWait = WaitForMultipleObjects(2, hEspera, FALSE, 1000);
         //CheckForError(retornoWait == WAIT_OBJECT_0);
+        if (WaitForSingleObject(hThreadTemporizacao, INFINITE) != WAIT_OBJECT_0)
+            printf("[LEITURA] Erro em WaitForSingleObject de Temporizacao! Codigo = %d\n", (int)GetLastError);
 
         if (retornoWait == WAIT_TIMEOUT) {
             // Essa função irá mudar na parte dois do trabalho, ficando mais complexa
             GerarMensagem('A');
-            GerarMensagem('P');       
+            GerarMensagem('P');
             GerarMensagem('O');
         }
 
-        if(retornoWait == (WAIT_OBJECT_0 + 0)) {
+        if (retornoWait == (WAIT_OBJECT_0 + 0)) {
             // Bloqueia-se esperando a tecla D novamente
             printf("*** Tarefa de Leitura Bloqueada! ***\n");
+            // Espera thread de temporizacao terminar
+            
             retornoWait = WaitForMultipleObjects(2, hEsperaTeclas, FALSE, INFINITE);
             //CheckForError(retornoWait == WAIT_OBJECT_0);
             printf("*** Tarefa de Leitura Desbloqueada! ***\n");
@@ -231,11 +247,6 @@ int main() {
     } while (retornoWait != (WAIT_OBJECT_0 + 1));
 
     printf("*** Finalizando Tarefa de Leitura! ***\n");
-
-    for (int i = 0; i < TAMANHO_LISTA_CIRCULAR; i++) {
-        bStatus = UnmapViewOfFile(listaCircular[i]);
-        //CheckForError(bStatus == 0);
-    }
 
 
     //CloseHandle(hListaCircular);
@@ -252,6 +263,9 @@ int main() {
     CloseHandle(hEventoLeituraPronta);
     CloseHandle(hEventoCapturaProcessoPronta);
     CloseHandle(hEventoCapturaOtimizacaoPronta);
+    CloseHandle(hThreadDadosOtimizacao);
+    CloseHandle(hThreadDadosProcesso);
+    CloseHandle(hThreadTemporizacao);
 
 
     return 0;
@@ -272,7 +286,7 @@ void GerarMensagem(const char tipoMensagem) {
         exit(-1);
     }
 
-    if(tipoMensagem == 'P' || tipoMensagem == 'O') DepositarMensagem(mensagem);
+    if (tipoMensagem == 'P' || tipoMensagem == 'O') DepositarMensagem(mensagem);
 
 }
 
@@ -407,12 +421,12 @@ void GerarMensagemAlarme(char* mensagem) {
 
 void GerarMensagemOtimizacao(char* mensagem) {
 
-    
+
     mensagemOtimizacao novaMensagem;
     DWORD status;
     SYSTEMTIME relogio;
     int offset = 0;
-    
+
     // 1. Obter o NSeq
     status = WaitForSingleObject(hMutexNSeq, INFINITE);
     //CheckForError(status == 0);
@@ -422,7 +436,7 @@ void GerarMensagemOtimizacao(char* mensagem) {
     nSeqGeral++;
     status = ReleaseMutex(hMutexNSeq);
     //CheckForError(status == 0);
-    
+
     TraduzirIntParaChar(mensagem, novaMensagem.nSeq, TAMANHO_NSEQ, offset);
     offset += TAMANHO_NSEQ;
     mensagem[offset] = '$';
@@ -473,7 +487,7 @@ void GerarMensagemOtimizacao(char* mensagem) {
     offset += TAMANHO_PARTE_TEMPO;
     mensagem[offset] = '\0';
 
-   
+
 }
 
 void DepositarMensagem(char* mensagem) {
@@ -500,7 +514,7 @@ void DepositarMensagem(char* mensagem) {
 
     status = ReleaseMutex(hMutexListaCircular);
     //CheckForError(status == 0);
-    
+
 }
 
 void TraduzirIntParaChar(char* mensagem, int valor, int tamanho, int offset) {
@@ -552,7 +566,7 @@ double RandFaixaDouble(double min, double max) {
     double range = (max - min);
     double div = RAND_MAX / range;
     return min + (rand() / div);
-} 
+}
 
 DWORD WINAPI TarefaCapturaDadosProcesso() {
 
@@ -601,10 +615,10 @@ DWORD WINAPI TarefaCapturaDadosProcesso() {
                 status = ReleaseSemaphore(hSemaforoOcupadas, 1, NULL);
             }
             else {
-            posicaoOcupada = (posicaoOcupada + 1) % TAMANHO_MSG_MAX;
-            EnviarMensagemProcesso(mensagem);
+                posicaoOcupada = (posicaoOcupada + 1) % TAMANHO_MSG_MAX;
+                EnviarMensagemProcesso(mensagem);
 
-            status = ReleaseSemaphore(hSemaforoLivres, 1, NULL);
+                status = ReleaseSemaphore(hSemaforoLivres, 1, NULL);
             }
 
             status = ReleaseMutex(hMutexListaCircular);
@@ -678,7 +692,7 @@ DWORD WINAPI TarefaCapturaDadosOtimizacao() {
             // Bloqueia-se esperando a tecla P novamente
             printf("*** Tarefa de Captura de Dados de Otimizacao Bloqueada! ***\n");
             retornoWait = WaitForMultipleObjects(2, hEsperaTeclas, FALSE, INFINITE);
-            CheckForError(retornoWait == WAIT_OBJECT_0);
+            //CheckForError(retornoWait == WAIT_OBJECT_0);
             printf("*** Tarefa de Captura de Dados de Otimizacao Desbloqueada! ***\n");
         }
 
@@ -692,6 +706,52 @@ DWORD WINAPI TarefaCapturaDadosOtimizacao() {
     return(0);
 }
 
+DWORD WINAPI TemporizacaoTarefas() {
+    BOOL status;
+    DWORD retornoWait;
+    HANDLE hEsperaTeclas[2];
+    int nEvento;
+
+    printf("\n\nPASSEI AQUI\n\n");
+
+    hEsperaTeclas[0] = hEventoTeclaD;
+    hEsperaTeclas[1] = hEventoTeclaEsc;
+
+    hFilaTemporizadores = CreateTimerQueue();
+    if (hFilaTemporizadores == NULL) {
+        printf("[LEITURA] Falha na criacao da Fila de Temporizadores! Codigo = %d)\n", GetLastError());
+        return 0;
+    }
+
+    // Temporizador das mensagens de dados de processo - a cada 500ms
+    status = CreateTimerQueueTimer(&hTemporizadorAlarme, hFilaTemporizadores, (WAITORTIMERCALLBACK)MensagensProcessos,
+        NULL, 0, 500, WT_EXECUTEDEFAULT);
+    if (!status) {
+        printf("[LEITURA] Erro no Temporizador Alarme! Codigo = %d)\n", GetLastError());
+        return 0;
+    }
+
+    // Temporizador das mensagens de alarme - aleatório entre 1 e 5 segundos
+    int temporizadorAleatorio = (rand() % 4000) + 1000;
+    status = CreateTimerQueueTimer(&hTemporizadorProcesso, hFilaTemporizadores, (WAITORTIMERCALLBACK)MensagensAlarme,
+        NULL, 0, temporizadorAleatorio, WT_EXECUTEDEFAULT);
+    if (!status) {
+        printf("[LEITURA] Erro no Temporizador de Dados de Processo! Codigo = %d)\n", GetLastError());
+        return 0;
+    }
+
+    do {
+        retornoWait = WaitForMultipleObjects(2, hEsperaTeclas, FALSE, INFINITE);
+        nEvento = retornoWait - WAIT_OBJECT_0;
+        if (nEvento == 0) {// Novo valor de Pid
+            printf("\n\nPASSEI AQUI2\n\n");
+        }
+    } while (nEvento != 1);	// Esc foi escolhido
+
+
+    if (!DeleteTimerQueueEx(hFilaTemporizadores, NULL))
+        printf("[LEITURA] Falha em Deletar a Fila de Temporizadores! Codigo = %d\n", GetLastError());
+}
 
 void EnviarMensagemProcesso(char* mensagem) {
     BOOL status;
@@ -701,7 +761,16 @@ void EnviarMensagemProcesso(char* mensagem) {
     printf("mensagem de processo enviada\n");
     SetEvent(hMsgProcessoDisponivel);
 }
-void EnviarMensagemOtimizacao(char* mensagem) {
-    
 
+void EnviarMensagemOtimizacao(char* mensagem) {
+
+
+}
+
+void CALLBACK MensagensProcessos(PVOID, BOOLEAN) {
+    printf("\nTEMPORIZACAO DE PROCESSOS\n");
+}
+
+void CALLBACK MensagensAlarme(PVOID, BOOLEAN) {
+    printf("\nTEMPORIZACAO DE ALARMES\n");
 }

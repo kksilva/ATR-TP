@@ -21,21 +21,22 @@
 #define TECLA_ESC 0x1B
 #define WIN32_LEAN_AND_MEAN 
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
-DWORD WINAPI WaitEventFunc(LPVOID);	// declaraÁ„o da funÁ„o  coisa do cÛdigo exemplo
+DWORD WINAPI WaitEventFunc(LPVOID);	// declara√ß√£o da fun√ß√£o  coisa do c√≥digo exemplo
 
-// Casting para terceiro e sexto par‚metros da funÁ„o _beginthreadex
+// Casting para terceiro e sexto par√¢metros da fun√ß√£o _beginthreadex
 typedef unsigned (WINAPI* CAST_FUNCTION)(LPVOID);
 typedef unsigned* CAST_LPDWORD;
 
-// *** FunÁıes ***
+// *** Fun√ß√µes ***
 void EsperaTeclado();
 void CriaObjetos();
 void FechaObjetos();
 
-// Vari·veis Globais
-PROCESS_INFORMATION ProcessoLeitura;	// InformaÁıes sobre novo processo criado
-PROCESS_INFORMATION ProcessoCaptura;	// InformaÁıes sobre novo processo criado
-PROCESS_INFORMATION ProcessoExibicao;	// InformaÁıes sobre novo processo criado
+// Vari√°veis Globais
+PROCESS_INFORMATION ProcessoLeitura;	    // Informa√ß√µes sobre novo processo criado
+PROCESS_INFORMATION ProcessoCaptura;	    // Informa√ß√µes sobre novo processo criado
+PROCESS_INFORMATION ProcessoExibicaoProcesso;	// Informa√ß√µes sobre novo processo criado
+PROCESS_INFORMATION ProcessoExibicaoOtimizacao;	// Informa√ß√µes sobre novo processo criado
 
 HANDLE hEventoTeclaEsc, hEventoTeclaD, hEventoTeclaO, hEventoTeclaP, hEventoTeclaQ, hEventoTeclaS, hEventoTeclaX;
 HANDLE hEventoTudoPronto, hEventoLeituraPronta, hEventoCapturaProcessoPronta, hEventoCapturaOtimizacaoPronta,
@@ -43,15 +44,15 @@ hEventoExibicaoProcessoPronta, hEventoExibicaoOtimizacaoPronta;
 
 int main() {
 
-    // 1. InicializaÁ„o
+    // 1. Inicializa√ß√£o
     SetConsoleTitle("Integrador SCADA e CLP");
     printf("============ Integrador SCADA e CLP ============\n");
 
     // 2. Eventos de Tecla
     CriaObjetos();
 
-    // 3. CriaÁ„o de processos
-        // 3.1 DeclaraÁ„o de Vari·veis
+    // 3. Cria√ß√£o de processos
+        // 3.1 Declara√ß√£o de Vari√°veis
     BOOL status;
     STARTUPINFO si;						    // StartUpInformation para novo processo
     DWORD retornoWait;
@@ -62,12 +63,12 @@ int main() {
     status = CreateProcess(
         "..\\Leitura\\TarefaLeitura\\x64\\Debug\\TarefaLeitura.exe",
         NULL,											// linha de comando
-        NULL,											// atributos de seguranÁa do processo
-        NULL,											// atributos de seguranÁa da thread
-        FALSE,											// heranÁa de handles
+        NULL,											// atributos de seguran√ßa do processo
+        NULL,											// atributos de seguran√ßa da thread
+        FALSE,											// heran√ßa de handles
         NORMAL_PRIORITY_CLASS,							// CreationFlags
         NULL,											// lpEnvironment
-        "..\\Leitura\\TarefaLeitura\\x64\\Debug\\",		// diretÛrio corrente do filho
+        "..\\Leitura\\TarefaLeitura\\x64\\Debug\\",		// diret√≥rio corrente do filho
         &si,											// lpStartUpInfo
         &ProcessoLeitura
     );
@@ -75,7 +76,7 @@ int main() {
 
 
     // Espera o Primeiro Processo Filho para Iniciar o Segundo 
-    // (de maneira a garantir que os mailslots e arquivos em disco sejam devidamente abertos S” depois de serem criados)
+    // (de maneira a garantir que os mailslots e arquivos em disco sejam devidamente abertos S√ì depois de serem criados)
     HANDLE hEsperaProcessoLeituraCaptura[3];
 
     hEsperaProcessoLeituraCaptura[0] = hEventoLeituraPronta;
@@ -84,38 +85,56 @@ int main() {
     retornoWait = WaitForMultipleObjects(3, hEsperaProcessoLeituraCaptura, TRUE, INFINITE);
 
 
-    // 3.3. Cria o processo de ExibiÁ„o de Mensagens
+    // 3.3. Cria os dois processos de Exibi√ß√£o de Mensagens
+
     status = CreateProcess(
-        "..\\Exibicao\\TarefasExibicao\\x64\\Debug\\TarefasExibicao.exe",
+        "..\\Exibicao\\TarefaExibicaoProcesso\\x64\\Debug\\TarefaExibicaoProcesso.exe",
         NULL,											// linha de comando
-        NULL,											// atributos de seguranÁa do processo
-        NULL,											// atributos de seguranÁa da thread
-        FALSE,											// heranÁa de handles
+        NULL,											// atributos de seguran√ßa do processo
+        NULL,											// atributos de seguran√ßa da thread
+        FALSE,											// heran√ßa de handles
         NORMAL_PRIORITY_CLASS | CREATE_NEW_CONSOLE,		// CreationFlags
         NULL,											// lpEnvironment
-        "..\\Exibicao\\TarefasExibicao\\x64\\Debug\\",  // diretÛrio corrente do filho
+        "..\\Exibicao\\TarefaExibicaoProcesso\\x64\\Debug\\",  // diret√≥rio corrente do filho
         &si,											// lpStartUpInfo
-        &ProcessoExibicao
+        &ProcessoExibicaoProcesso
     );
-    if (!status) printf("Erro na criacao do <Processo de Exibicao>! Codigo = %d\n", GetLastError());
+    if (!status) printf("Erro na criacao do <Processo de Exibicao de Processo>! Codigo = %d\n", GetLastError());
 
-    // Espera o Segundo Proceso Filho para Iniciar a rotina geral
-    HANDLE hEsperaProcessoExibicao[2];
-    hEsperaProcessoExibicao[0] = hEventoExibicaoProcessoPronta;
-    hEsperaProcessoExibicao[1] = hEventoExibicaoOtimizacaoPronta;
-    retornoWait = WaitForMultipleObjects(2, hEsperaProcessoExibicao, TRUE, INFINITE);
+    status = CreateProcess(
+        "..\\Exibicao\\TarefaExibicaoOtimizacao\\x64\\Debug\\TarefaExibicaoOtimizacao.exe",
+        NULL,											// linha de comando
+        NULL,											// atributos de seguran√ßa do processo
+        NULL,											// atributos de seguran√ßa da thread
+        FALSE,											// heran√ßa de handles
+        NORMAL_PRIORITY_CLASS | CREATE_NEW_CONSOLE,		// CreationFlags
+        NULL,											// lpEnvironment
+        "..\\Exibicao\\TarefaExibicaoOtimizacao\\x64\\Debug\\",  // diret√≥rio corrente do filho
+        &si,											// lpStartUpInfo
+        &ProcessoExibicaoOtimizacao
+    );
+    if (!status) printf("Erro na criacao do <Processo de Exibicao de Otimizacao>! Codigo = %d\n", GetLastError());
+
+
+
+    // Espera os Procesos Filhos de Exibicao para Iniciar a rotina geral
+    HANDLE hEsperaProcessosExibicao[2];
+    hEsperaProcessosExibicao[0] = hEventoExibicaoProcessoPronta;
+    hEsperaProcessosExibicao[1] = hEventoExibicaoOtimizacaoPronta;
+    retornoWait = WaitForMultipleObjects(1, hEsperaProcessosExibicao, TRUE, INFINITE);
 
     SetEvent(hEventoTudoPronto);
 
-    // 5. Inicia e MantÈm a Rotina
+    // 5. Inicia e Mant√©m a Rotina
+    SetConsoleTitle("Integrador SCADA e CLP");
     printf("Tarefa de Leitura do Teclado Executando Rotina\n");
     printf("Esperando uma tecla...\n");
-    // AtÈ a tecla ESC ser digitada, o processo permanecer· em loop dentro desta funÁ„o:
+    // At√© a tecla ESC ser digitada, o processo permanecer√° em loop dentro desta fun√ß√£o:
     EsperaTeclado();
 
-    Sleep(5000);
-    // 6. FinalizaÁ„o de Handles
-        // DestruiÁ„o de outros objetos de sincronizaÁ„o
+    Sleep(2000);
+    // 6. Finaliza√ß√£o de Handles
+        // Destrui√ß√£o de outros objetos de sincroniza√ß√£o
     FechaObjetos();
 
     return 0;
@@ -150,7 +169,7 @@ void EsperaTeclado() {
         }
         else if (tecla == 'S' || tecla == 's') {
             printf("> Tecla S digitada\n");
-            SetEvent(hEventoTeclaX);
+            SetEvent(hEventoTeclaS);
 
         }
         else if (tecla == 'X' || tecla == 'x') {
@@ -171,9 +190,9 @@ void EsperaTeclado() {
 }
 
 void CriaObjetos() {
-    // 2.1. DeclaraÁ„o dos Handles de Eventos
+    // 2.1. Declara√ß√£o dos Handles de Eventos
            // Globais
-    // 2.2. CriaÁ„o dos Eventos
+    // 2.2. Cria√ß√£o dos Eventos
     hEventoTeclaEsc = CreateEvent(NULL, TRUE, FALSE, "TeclaESC");
     if (hEventoTeclaEsc == 0) { printf("Erro na criacao do Evento <Tecla ESC Pressionada>\n"); exit(-1); }
     hEventoTeclaD = CreateEvent(NULL, FALSE, FALSE, "TeclaD");
@@ -189,7 +208,7 @@ void CriaObjetos() {
     hEventoTeclaX = CreateEvent(NULL, FALSE, FALSE, "TeclaX");
     if (hEventoTeclaX == 0) { printf("Erro na criacao do Evento <Tecla X Pressionada>\n"); exit(-1); }
 
-    // Evento que autoriza o comeÁo da rotina de todas as tarefas estiverem operantes
+    // Evento que autoriza o come√ßo da rotina de todas as tarefas estiverem operantes
     hEventoTudoPronto = CreateEvent(NULL, TRUE, FALSE, "TudoPronto");
     if (hEventoTudoPronto == 0) { printf("Erro na criacao do Evento <Tudo Pronto>\n"); exit(-1); }
     hEventoLeituraPronta = CreateEvent(NULL, FALSE, FALSE, "LeituraPronta");
@@ -225,9 +244,9 @@ void FechaObjetos() {
     // 6.2. Handles de Processo
     CloseHandle(ProcessoLeitura.hProcess);
     CloseHandle(ProcessoLeitura.hThread);
-    //CloseHandle(ProcessoCaptura.hProcess);
-    //CloseHandle(ProcessoCaptura.hThread);
-    CloseHandle(ProcessoExibicao.hProcess);
-    CloseHandle(ProcessoExibicao.hThread);
+    CloseHandle(ProcessoExibicaoProcesso.hProcess);
+    CloseHandle(ProcessoExibicaoProcesso.hThread);
+    CloseHandle(ProcessoExibicaoOtimizacao.hProcess);
+    CloseHandle(ProcessoExibicaoOtimizacao.hThread);
 
 }

@@ -21,14 +21,23 @@
 #define WIN32_LEAN_AND_MEAN 
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
 DWORD WINAPI WaitEventFunc(LPVOID);
+// Tamanho dos Campos
+#define TAMANHO_NSEQ 4
+#define TAMANHO_TIPO 2
+#define TAMANHO_T_ZONAS 6
+#define TAMANHO_PARTE_TEMPO 2
+#define TAMANHO_TEMPO 8
+#define TAMANHO_DECIMAL 1
+
 
 // ** Handles **
 HANDLE hEventoTeclaEsc, hEventoTeclaS, hEventoTeclaX;
 HANDLE  hEventoTudoPronto, hEventoExibicaoOtimizacaoPronta;
 HANDLE hMsgOtimizacaoDisponivel;
+HANDLE hArquivoOtimizacao;
 
 // ** Funções **
-void LerMensagemOtimizacao();
+void LerMensagemOtimizacao(int indice);
 
 int main() { // Receber parametros
 
@@ -55,6 +64,15 @@ int main() { // Receber parametros
     hMsgOtimizacaoDisponivel = OpenEvent(EVENT_ALL_ACCESS, FALSE, "MsgOtimizacaoDisponivel");
     if (hMsgOtimizacaoDisponivel == 0) { printf("[EXIBICAO] Erro na abertura do evento <MsgOtimizacaoDisponivel>\n"); exit(-1); }
     
+    hArquivoOtimizacao = CreateFile(
+        "..\\..\\..\\..\\Arquivo Circular em Disco\\DadosDeOtimizacao.txt",
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
 
     // Avisa que está pronta e espera as outras
     printf("*** Tarefa de Exibicao de Dados de Otimizacao Pronta para Executar! ***\n");
@@ -62,26 +80,25 @@ int main() { // Receber parametros
     WaitForSingleObject(hEventoTudoPronto, INFINITE);
 
 
+
+
     // Começa a Rotina
     HANDLE hEventos[4] = { hEventoTeclaS, hEventoTeclaX, hEventoTeclaEsc, hMsgOtimizacaoDisponivel};
     DWORD retornoSincronizacao;
-
+    int indice = 0;
     // 2. Aguarda a sinalizacao de um evento
-    do {
-        int countPerdasOtimizacao = 0;     
+    do {  
         retornoSincronizacao = WaitForMultipleObjects(4, hEventos, FALSE, INFINITE);
 
-        if (retornoSincronizacao == (WAIT_OBJECT_0 + 0)) {             // hEventoTeclaQ: exibição de dados de processo
-            // Bloqueia-se esperando a tecla Q novamente ou a tecla ESC
+        if (retornoSincronizacao == (WAIT_OBJECT_0 + 0)) {            
+            // Bloqueia-se esperando a tecla S novamente ou a tecla ESC
             printf("*** Tarefa de Exibicao de Dados de Otimizacao Bloqueada! ***\n");
             do {
                 retornoSincronizacao = WaitForMultipleObjects(4, hEventos, FALSE, INFINITE);
                 if (retornoSincronizacao == (WAIT_OBJECT_0 + 1)) {
                     system("CLS");
                 }
-                else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3)) {
-                    countPerdasOtimizacao++;
-                }
+                else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3));
                 else {
                     printf("*** Tarefa de Exibicao de Dados de Otimizacao Desbloqueada! ***\n");
                     
@@ -95,10 +112,8 @@ int main() { // Receber parametros
         }
 
         else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3)) {
-            LerMensagemOtimizacao();
-        }
-        else if (retornoSincronizacao == (WAIT_OBJECT_0 + 4)) {
-            LerMensagemOtimizacao();
+            LerMensagemOtimizacao(indice);
+            indice++;
         }
 
     } while (retornoSincronizacao != (WAIT_OBJECT_0 + 2));
@@ -129,7 +144,44 @@ int main() { // Receber parametros
     return 0;
 }
 
-void LerMensagemOtimizacao() {
+void LerMensagemOtimizacao(int indice) {
 
+    LONG ponteiro;
+    BOOL status;
+    CHAR mensagem[TAMANHO_MSG_OTIMIZACAO];
+    DWORD bytesLidos;
 
+    ponteiro = indice * (TAMANHO_MSG_OTIMIZACAO);
+    // Posiciona apontador no arquivo
+    ponteiro = SetFilePointer(hArquivoOtimizacao, ponteiro, NULL, FILE_BEGIN);
+
+    // Le registro desejado
+    status = ReadFile(hArquivoOtimizacao, mensagem, TAMANHO_MSG_OTIMIZACAO, &bytesLidos, NULL);
+    if (!status) printf("erro");
+    mensagem[TAMANHO_MSG_OTIMIZACAO - 1] = '\0';
+
+//#define TAMANHO_NSEQ 4
+//#define TAMANHO_TIPO 2
+//#define TAMANHO_T_ZONAS 6
+//#define TAMANHO_PARTE_TEMPO 2
+//#define TAMANHO_TEMPO 8
+//#define TAMANHO_DECIMAL 1
+
+    printf("mensagem otimizacao:\n%s\n", mensagem);
+
+    int offset = TAMANHO_NSEQ + 1 + TAMANHO_TIPO + 1 + 3*(TAMANHO_T_ZONAS + 1) + 1;
+    for (int i = offset; i < offset+; i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf(" NSEQ: ");
+
+    int offset = 0;
+    for (int i = offset; i < (TAMANHO_MSG_OTIMIZACAO - 1); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    
+
+    return;
 }

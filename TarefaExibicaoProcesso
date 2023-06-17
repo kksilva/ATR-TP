@@ -94,22 +94,10 @@ int main() {
             printf("*** Tarefa de Exibicao de Dados do Processo Bloqueada! ***\n");
             do {
                 retornoSincronizacao = WaitForMultipleObjects(4, hEventos, FALSE, INFINITE);
-                if (retornoSincronizacao == (WAIT_OBJECT_0 + 2)) {
-                    countPerdasAlarme++;
-                }
-                else if (retornoSincronizacao == (WAIT_OBJECT_0 + 3)) {
-                    countPerdasProcesso++;
-                }
-                else {
-                    printf("*** Tarefa de Exibicao de Dados do Processo Desbloqueada! ***\n");
 
-                }
             } while ((retornoSincronizacao != (WAIT_OBJECT_0 + 0)) && (retornoSincronizacao != (WAIT_OBJECT_0 + 1)));
 
-        }
-        else if (retornoSincronizacao == (WAIT_OBJECT_0 + 1)) {
-            printf("Teste");
-            break;
+            printf("*** Tarefa de Exibicao de Dados do Processo Desbloqueada! ***\n");
         }
 
         else if (retornoSincronizacao == (WAIT_OBJECT_0 + 2)) {
@@ -152,7 +140,14 @@ int main() {
 
 void LerMensagemAlarme() {
     char mensagem[TAMANHO_MSG_ALARME];
+    BOOL status;
+    DWORD bytesLidos;
+    status = ReadFile(hMailslot, mensagem, TAMANHO_MSG_ALARME, &bytesLidos, NULL);
+    if (status == 0) { printf("[EXIBICAO PROCESSO] Erro na abertura na leitura da mensagem\n"); exit(-1); }
+
+    printf("alarme:\n>>%s\n", mensagem);
     return;
+
 }
 
 void LerMensagemProcesso() {

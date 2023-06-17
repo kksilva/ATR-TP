@@ -23,6 +23,15 @@ DWORD WINAPI WaitEventFunc(LPVOID);
 // Tamanho das Mensagens
 #define TAMANHO_MSG_PROCESSO 42+1
 #define TAMANHO_MSG_ALARME 19+1
+// Tamanho dos Campos
+#define TAMANHO_NSEQ 4
+#define TAMANHO_TIPO 2
+#define TAMANHO_T_ZONAS 6
+#define TAMANHO_PRESSAO 4
+#define TAMANHO_PARTE_TEMPO 2
+#define TAMANHO_TEMPO 8
+#define TAMANHO_DECIMAL 1
+#define TAMANHO_CODIGO 2
 
 
 // ** Handles **
@@ -34,6 +43,22 @@ HANDLE hMailslot;
 // ** Funções **
 void LerMensagemAlarme();
 void LerMensagemProcesso();
+
+// ** Códigos de Alarmes ** 
+#define QTD_ALARMES 10
+char descricaoAlarme[QTD_ALARMES][30] =
+{
+    "00|Pressao atm baixa no forno",
+    "01|Pressao atm alta no forno ",
+    "02|Parada total de producao  ",
+    "03|Parada producao por 60 min",
+    "04|Temperatura baixa no forno",
+    "05|Temperatura alta no forno ",
+    "06|Danos leves a equipamentos",
+    "07|Danos criticos equipamento",
+    "08|Equipamento inoperante    ",
+    "09|Pressao atm alta no forno "
+};
 
 int main() {
     
@@ -146,6 +171,36 @@ void LerMensagemAlarme() {
     if (status == 0) { printf("[EXIBICAO PROCESSO] Erro na abertura na leitura da mensagem\n"); exit(-1); }
 
     printf("alarme:\n>>%s\n", mensagem);
+
+
+    // Horário
+    int offset = TAMANHO_NSEQ + 1 + TAMANHO_TIPO + 1 + TAMANHO_CODIGO + 1;
+    for (int i = offset; i < (offset + TAMANHO_TEMPO); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf(" NSEQ: ");
+    offset = 0;
+    for (int i = offset; i < (offset + TAMANHO_NSEQ); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf(" CODIGO: ");
+    offset = TAMANHO_NSEQ + 1 + TAMANHO_TIPO + 1;
+    for (int i = offset; i < (offset + TAMANHO_TIPO); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf(" ");
+
+    offset = TAMANHO_NSEQ + 1 + 1;
+    for(int i = 0; i < QTD_ALARMES; i++) {
+        if (mensagem[offset] == descricaoAlarme[i][1]) {
+            printf("%s", descricaoAlarme[i]);
+        }
+    }
+
+    printf("\n");
     return;
 
 }
@@ -159,5 +214,53 @@ void LerMensagemProcesso() {
     if (status == 0) { printf("[EXIBICAO PROCESSO] Erro na abertura na leitura da mensagem\n"); exit(-1); }
 
     printf("mensagem:\n>>%s\n", mensagem);
+
+
+    int offset;
+
+    printf(" NSEQ: ");
+    offset = 0;
+    for (int i = offset; i < (offset + TAMANHO_NSEQ); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf(" T_ZP: ");
+    offset = TAMANHO_NSEQ + 1 + TAMANHO_TIPO + 1;
+    for (int i = offset; i < (offset + TAMANHO_T_ZONAS); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf("C T_ZA: ");
+    offset += TAMANHO_T_ZONAS + 1;
+    for (int i = offset; i < (offset + TAMANHO_T_ZONAS); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf("C T_ZE: ");
+    offset += TAMANHO_T_ZONAS + 1;
+    for (int i = offset; i < (offset + TAMANHO_T_ZONAS); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf("C P: ");
+    offset += TAMANHO_T_ZONAS + 1;
+    for (int i = offset; i < (offset + TAMANHO_PRESSAO); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+    printf("psi ");
+
+    // Horário
+    offset = TAMANHO_NSEQ + 1 + TAMANHO_TIPO + 1 + 3 * (TAMANHO_T_ZONAS + 1) + TAMANHO_PRESSAO;
+    for (int i = offset; i < (offset + TAMANHO_TEMPO); i++) {
+        printf("%c", mensagem[i]);
+    }
+
+
+
+    printf("\n");
+
+
     return;
+
 }
